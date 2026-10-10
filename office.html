@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>たなかAIカンパニー オフィス</title>
+<style>
+  :root {
+    --bg1: #fdf3e3; --bg2: #f3dcc0;
+    --ink: #4a3426; --sub: #8a6a55; --card: #fffaf2; --line: #efdcc4;
+    --shiba: #e8964a; --mint: #6fbfa8; --rose: #ec9a92; --off: #e4d8ca;
+    --overlay: rgba(90, 60, 35, .28); --shadow: 0 8px 28px rgba(120, 80, 40, .2);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg1: #2f2620; --bg2: #1f1915; --ink: #f6e9da; --sub: #c9ae95; --card: #3a2f27;
+      --line: #55453a; --off: #5a4c41; --overlay: rgba(0, 0, 0, .45); --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg1: #2f2620; --bg2: #1f1915; --ink: #f6e9da; --sub: #c9ae95; --card: #3a2f27;
+    --line: #55453a; --off: #5a4c41; --overlay: rgba(0, 0, 0, .45); --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(ellipse at 50% 35%, var(--bg1), var(--bg2));
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; touch-action: none; }
+
+  /* 隅の小さな表示 */
+  #hud {
+    position: fixed; left: 14px; top: 14px; z-index: 5;
+    background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+    padding: 9px 12px 8px; box-shadow: var(--shadow); min-width: 168px;
+  }
+  #hud .co { font-weight: 800; font-size: 14px; letter-spacing: .02em; }
+  #hud .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 2px; font-size: 12px; color: var(--sub); }
+  #hud .cnt { font-size: 15px; font-weight: 800; color: var(--ink); }
+  #dots { display: flex; gap: 5px; margin-top: 6px; }
+  #dots .d { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 9px; color: var(--sub); }
+  #dots .d i { width: 14px; height: 14px; border-radius: 50%; background: var(--off); display: block; }
+  #dots .d.on i { background: var(--shiba); }
+  #dots .d.on.no_news i { background: var(--mint); }
+  #dots .d.on.search_failed i { background: var(--rose); }
+  #dots .d.today i { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+  #tools { position: fixed; right: 14px; bottom: 14px; z-index: 5; display: flex; gap: 8px; align-items: center; }
+  .round {
+    border: 2px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px;
+    height: 44px; min-width: 44px; padding: 0 14px; font: inherit; font-weight: 800; font-size: 15px;
+    box-shadow: var(--shadow); cursor: pointer;
+  }
+  .round:hover { transform: translateY(-1px); }
+  #hint { font-size: 11px; color: var(--sub); opacity: .8; }
+
+  /* 名札・吹き出し・報告書バッジ（3Dの上に重ねる） */
+  #labels { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+  .tag, .bubble, .badge { position: absolute; left: 0; top: 0; will-change: transform; white-space: nowrap; }
+  .tag {
+    background: #fffaf2; color: #4a3426; border: 2px solid #e8964a; border-radius: 10px;
+    padding: 2px 9px; font-size: 13px; font-weight: 800; box-shadow: 0 3px 10px rgba(120,80,40,.2);
+  }
+  .bubble {
+    background: #ffffff; color: #4a3426; border-radius: 14px; padding: 7px 12px; font-size: 14px; font-weight: 800;
+    box-shadow: 0 4px 14px rgba(120,80,40,.22); animation: pop .5s ease-out both;
+  }
+  .bubble::after {
+    content: ""; position: absolute; left: 14px; bottom: -8px; border: 8px solid transparent;
+    border-top-color: #ffffff; border-bottom: 0;
+  }
+  .badge {
+    pointer-events: auto; cursor: pointer; background: #e8964a; color: #fff; border-radius: 999px;
+    padding: 3px 10px; font-size: 13px; font-weight: 800; box-shadow: 0 3px 10px rgba(120,80,40,.3);
+    border: 2px solid #fff;
+  }
+  .badge span { display: inline-block; animation: hop 1.6s ease-in-out infinite; }
+  @keyframes pop { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
+  @keyframes hop { 0%, 100% { translate: 0 0; } 50% { translate: 0 -3px; } }
+
+  /* ポップアップ */
+  #modal { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; background: var(--overlay); padding: 16px; }
+  #modal.open { display: flex; }
+  .panel {
+    width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto;
+    background: var(--card); border: 2px solid var(--line); border-radius: 22px; box-shadow: var(--shadow);
+    padding: 18px 18px 16px; position: relative; animation: pop .25s ease-out both;
+  }
+  .panel h2 { margin: 0 0 12px; font-size: 17px; }
+  .close { position: absolute; right: 10px; top: 10px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--line); color: var(--ink); font-size: 18px; cursor: pointer; }
+  .cards { display: grid; gap: 10px; }
+  .card { display: flex; gap: 10px; align-items: center; background: var(--bg1); border: 2px solid var(--line); border-radius: 16px; padding: 10px 12px; }
+  .card .ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: var(--card); }
+  .card .hl { font-weight: 800; font-size: 15px; line-height: 1.35; }
+  .card a.src { font-size: 12px; color: var(--sub); text-decoration: none; border-bottom: 1px dashed var(--sub); }
+  .empty { text-align: center; padding: 14px 6px; font-weight: 800; font-size: 16px; }
+  .empty .big { font-size: 44px; display: block; margin-bottom: 4px; }
+  .open-report {
+    display: block; text-align: center; margin-top: 14px; padding: 11px; border-radius: 14px;
+    background: var(--shiba); color: #fff; text-decoration: none; font-weight: 800;
+  }
+  .idcard { display: flex; gap: 14px; align-items: center; }
+  .idcard .photo { flex: none; width: 96px; height: 96px; border-radius: 18px; background: #fde6c8; display: grid; place-items: center; overflow: hidden; border: 3px solid #e8964a; }
+  .idcard dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 14px; }
+  .idcard dt { color: var(--sub); }
+  .idcard dd { margin: 0; font-weight: 800; }
+  .idhead { background: var(--shiba); color: #fff; margin: -18px -18px 14px; padding: 10px 18px; border-radius: 20px 20px 0 0; font-weight: 800; letter-spacing: .1em; font-size: 13px; }
+
+  /* 3Dが使えないときの表示 */
+  #fallback { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 90px 16px 16px; overflow: auto; z-index: 3; }
+  #fallback.show { display: flex; }
+  #fallback .panel { animation: none; }
+  .fb-top { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .fb-say { background: var(--bg1); border: 2px solid var(--line); border-radius: 14px; padding: 8px 12px; font-weight: 800; }
+  .fb-note { font-size: 11px; color: var(--sub); margin-top: 10px; text-align: center; }
+
+  @media (max-width: 520px) {
+    #hud { left: 10px; top: 10px; padding: 7px 10px; }
+    #tools { right: 10px; bottom: 10px; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div id="labels"></div>
+
+<div id="hud" aria-live="polite">
+  <div class="co" id="hud-co">🐾</div>
+  <div class="row"><span id="hud-date"></span><span class="cnt" id="hud-count"></span></div>
+  <div id="dots" title="直近7日の出勤"></div>
+</div>
+
+<div id="tools">
+  <span id="hint">🖱 ドラッグ：回転 ／ ホイール：拡大</span>
+  <button class="round" id="btn-news" title="今日のニュース">📄</button>
+</div>
+
+<div id="fallback"><div class="panel" id="fb-panel"></div></div>
+
+<div id="modal" role="dialog" aria-modal="true">
+  <div class="panel" id="modal-panel"></div>
+</div>
+
+<!-- ここから下の JSON は ai-news が毎回 data/news.json の中身で丸ごと置き換えます。手で書き換えないでください。 -->
+<script id="news-data" type="application/json">
+{
+  "version": 1,
+  "company": {
+    "name": "たなかAIカンパニー"
+  },
+  "employee": {
+    "name": "ニュースくん",
+    "look": "メガネをかけた柴犬",
+    "job": "AIニュース担当",
+    "hours": "毎朝 7:00（日本時間）"
+  },
+  "days": [
+    {
+      "date": "2026-10-10",
+      "status": "reported",
+      "run_at": "2026-10-10T11:14+09:00",
+      "window": "2026-10-09 11:14〜2026-10-10 11:14（日本時間）",
+      "report_file": "報告/2026-10-10_AIニュース.md",
+      "speech": "社長！今日は2件です！",
+      "count": 2,
+      "news": [
+        {
+          "no": 1,
+          "headline": "無料版Geminiは軽量モデルだけに",
+          "category": "efficiency",
+          "date": "2026-10-09",
+          "date_note": "適用開始日（変更の報道は2026-10-03）",
+          "source": "9to5Google（報道）",
+          "url": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/",
+          "verified": "press",
+          "verified_note": "Google公式ヘルプは開けず、複数の報道で裏付け（記事本文も通信制限で開けず、検索結果で確認）"
+        },
+        {
+          "no": 2,
+          "headline": "ChatGPT悪用の偽記事に要注意",
+          "category": "chatgpt",
+          "date": "2026-10-09",
+          "date_note": "ワシントン・ポストの報道日（OpenAIの報告は2026-10-08）",
+          "source": "The Washington Post（報道）",
+          "url": "https://www.washingtonpost.com/technology/2026/10/09/chatgpt-users-iran-planted-ai-generated-articles-us-news-media/",
+          "verified": "press",
+          "verified_note": "OpenAI公式ページは開けず、NPRなどの報道で裏付け（記事本文も通信制限で開けず、検索結果で確認）"
+        }
+      ]
+    }
+  ]
+}
+</script>
+
+<!-- 3D表示（three.js r128 と同じ版の OrbitControls）。読み込めなくても件数と見出しは表示されます -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ========== データ ========== */
+  var DATA = {};
+  try { DATA = JSON.parse(document.getElementById("news-data").textContent) || {}; } catch (e) { DATA = {}; }
+  var COMPANY = (DATA.company && DATA.company.name) || "AIカンパニー";
+  var EMP = DATA.employee || {};
+  var EMP_NAME = EMP.name || "社員";
+  var DAYS = Array.isArray(DATA.days) ? DATA.days : [];
+
+  var CAT = {
+    chatgpt: { icon: "💬", label: "ChatGPT" },
+    claude: { icon: "🧡", label: "Claude" },
+    image: { icon: "🎨", label: "画像生成" },
+    efficiency: { icon: "⚡", label: "仕事効率化" },
+    other: { icon: "🤖", label: "その他" }
+  };
+  var WD = ["日", "月", "火", "水", "木", "金", "土"];
+
+  function jst() { // 日本時間の各値
+    var d = new Date(Date.now() + 9 * 3600e3);
+    return { y: d.getUTCFullYear(), mo: d.getUTCMonth() + 1, d: d.getUTCDate(), h: d.getUTCHours(),
+             mi: d.getUTCMinutes(), s: d.getUTCSeconds(), ms: d.getUTCMilliseconds() };
+  }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function ymd(t) { return t.y + "-" + pad(t.mo) + "-" + pad(t.d); }
+  function shift(dateStr, n) {
+    var p = dateStr.split("-").map(Number);
+    return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+  }
+  function wd(dateStr) { var p = dateStr.split("-").map(Number); return WD[new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay()]; }
+
+  var TODAY = ymd(jst());
+  var today = null;
+  DAYS.forEach(function (x) { if (x && x.date === TODAY) today = x; });
+  var STATE = !today ? "before" : (today.status || "reported"); // before / reported / no_news / search_failed
+  var NEWS = (today && Array.isArray(today.news)) ? today.news.slice(0, 5) : [];
+  var COUNT = NEWS.length;
+
+  function defaultSpeech() {
+    if (STATE === "reported") return "社長！今日は" + COUNT + "件です！";
+    if (STATE === "no_news") return "社長！今日は異常なしです！";
+    if (STATE === "search_failed") return "社長…今日は調べられませんでした…";
+    return "";
+  }
+  var SPEECH = (today && today.speech) || defaultSpeech();
+  var STATE_LABEL = { before: "出社前", reported: "報告済み（" + COUNT + "件）", no_news: "異常なし", search_failed: "検索できず" };
+
+  /* ========== 隅の表示 ========== */
+  document.title = COMPANY + " オフィス";
+  document.getElementById("hud-co").textContent = "🐾 " + COMPANY;
+  var parts = TODAY.split("-");
+  document.getElementById("hud-date").textContent = Number(parts[1]) + "/" + Number(parts[2]) + "(" + wd(TODAY) + ")";
+  document.getElementById("hud-count").textContent =
+    STATE === "before" ? "⏰ 出社前" : STATE === "search_failed" ? "💦 0件" : "📄 " + COUNT + "件";
+  var dots = document.getElementById("dots");
+  for (var i = 6; i >= 0; i--) {
+    var ds = shift(TODAY, -i), rec = null;
+    DAYS.forEach(function (x) { if (x && x.date === ds) rec = x; });
+    var el = document.createElement("div");
+    el.className = "d" + (rec ? " on " + (rec.status || "reported") : "") + (i === 0 ? " today" : "");
+    el.title = ds + (rec ? "：出社（" + (STATE_LABEL[rec.status] ? (rec.status === "reported" ? (rec.news || []).length + "件" : STATE_LABEL[rec.status]) : "") + "）" : "：お休み");
+    el.innerHTML = "<i></i>";
+    el.appendChild(document.createTextNode(wd(ds)));
+    dots.appendChild(el);
+  }
+
+  /* ========== ポップアップ ========== */
+  var modal = document.getElementById("modal"), mpanel = document.getElementById("modal-panel");
+  function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function safeUrl(u) { return (typeof u === "string" && /^https?:\/\//i.test(u)) ? u : null; }
+
+  function newsContent(container) {
+    container.appendChild(h("h2", null, "📄 今日のニュース " + Number(parts[1]) + "/" + Number(parts[2])));
+    if (STATE === "reported" && COUNT > 0) {
+      var cards = h("div", "cards");
+      NEWS.forEach(function (n) {
+        var c = h("div", "card");
+        var cat = CAT[n.category] || CAT.other;
+        var ic = h("div", "ic", cat.icon); ic.title = cat.label; c.appendChild(ic);
+        var body = h("div");
+        body.appendChild(h("div", "hl", n.headline || "（見出しなし）"));
+        var u = safeUrl(n.url);
+        if (u) {
+          var a = h("a", "src", "出典：" + (n.source || "リンク") + " ↗");
+          a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer";
+          body.appendChild(a);
+        } else if (n.source) { body.appendChild(h("span", "src", "出典：" + n.source)); }
+        c.appendChild(body); cards.appendChild(c);
+      });
+      container.appendChild(cards);
+    } else {
+      var msg = { before: ["⏰", "まだ出社前です"], no_news: ["✅", "今日は異常なし"], search_failed: ["💦", "今日は調べられませんでした"], reported: ["📭", "0件"] }[STATE];
+      var em = h("div", "empty"); em.appendChild(h("span", "big", msg[0])); em.appendChild(document.createTextNode(msg[1]));
+      container.appendChild(em);
+    }
+    if (today && today.report_file) {
+      var b = h("a", "open-report", "📝 報告ファイルを開く");
+      b.href = encodeURI(today.report_file); b.target = "_blank";
+      container.appendChild(b);
+    }
+  }
+
+  var SHIBA_SVG =
+    '<svg viewBox="0 0 100 100" width="92" height="92" aria-hidden="true">' +
+    '<polygon points="18,40 26,8 44,30" fill="#e8964a"/><polygon points="82,40 74,8 56,30" fill="#e8964a"/>' +
+    '<polygon points="24,34 28,16 38,30" fill="#fff1dc"/><polygon points="76,34 72,16 62,30" fill="#fff1dc"/>' +
+    '<ellipse cx="50" cy="56" rx="36" ry="32" fill="#e8964a"/>' +
+    '<ellipse cx="50" cy="68" rx="28" ry="20" fill="#fff1dc"/>' +
+    '<ellipse cx="38" cy="42" rx="5" ry="3" fill="#fff1dc"/><ellipse cx="62" cy="42" rx="5" ry="3" fill="#fff1dc"/>' +
+    '<circle cx="37" cy="52" r="4" fill="#2b2320"/><circle cx="63" cy="52" r="4" fill="#2b2320"/>' +
+    '<circle cx="37" cy="52" r="9" fill="none" stroke="#47506b" stroke-width="2.5"/><circle cx="63" cy="52" r="9" fill="none" stroke="#47506b" stroke-width="2.5"/>' +
+    '<line x1="46" y1="52" x2="54" y2="52" stroke="#47506b" stroke-width="2.5"/>' +
+    '<ellipse cx="50" cy="62" rx="5" ry="3.6" fill="#2b2320"/>' +
+    '<path d="M44 68 Q50 73 56 68" fill="none" stroke="#2b2320" stroke-width="2" stroke-linecap="round"/>' +
+    '</svg>';
+
+  function idContent(container) {
+    container.appendChild(h("div", "idhead", "STAFF ID ／ 社員証"));
+    var w = h("div", "idcard");
+    var ph = h("div", "photo"); ph.innerHTML = SHIBA_SVG; w.appendChild(ph);
+    var dl = h("dl");
+    [["名前", EMP_NAME], ["仕事", EMP.job || "AIニュース担当"], ["勤務", EMP.hours || "毎朝 7:00（日本時間）"], ["今日", STATE_LABEL[STATE] || STATE]]
+      .forEach(function (r) { dl.appendChild(h("dt", null, r[0])); dl.appendChild(h("dd", null, r[1])); });
+    w.appendChild(dl); container.appendChild(w);
+    container.appendChild(h("div", "fb-note", COMPANY));
+  }
+
+  function openModal(kind) {
+    mpanel.innerHTML = "";
+    var x = h("button", "close", "×"); x.setAttribute("aria-label", "閉じる"); x.onclick = closeModal; mpanel.appendChild(x);
+    (kind === "id" ? idContent : newsContent)(mpanel);
+    modal.classList.add("open");
+  }
+  function closeModal() { modal.classList.remove("open"); }
+  modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeModal(); });
+  document.getElementById("btn-news").onclick = function () { openModal("news"); };
+
+  function showFallback() {
+    var p = document.getElementById("fb-panel"); p.innerHTML = "";
+    var top = h("div", "fb-top");
+    var ph = h("div"); ph.innerHTML = SHIBA_SVG; top.appendChild(ph);
+    var right = h("div");
+    var tg = right.appendChild(h("div", "tag", EMP_NAME)); tg.style.position = "static"; tg.style.display = "inline-block";
+    if (SPEECH) right.appendChild(h("div", "fb-say", SPEECH)).style.marginTop = "6px";
+    else right.appendChild(h("div", "fb-say", "⏰ 出社前")).style.marginTop = "6px";
+    top.appendChild(right); p.appendChild(top);
+    newsContent(p);
+    p.appendChild(h("div", "fb-note", "3D表示を読み込めなかったため、かんたん表示にしています（ネット接続を確認してください）"));
+    document.getElementById("fallback").classList.add("show");
+    document.getElementById("hint").style.display = "none";
+  }
+
+  // 日付が変わったら読み込み直す
+  setInterval(function () { if (ymd(jst()) !== TODAY) location.reload(); }, 60000);
+
+  /* ========== 3D オフィス ========== */
+  if (typeof THREE === "undefined") { showFallback(); return; }
+  try { start3D(); } catch (err) { console.error(err); document.getElementById("stage").innerHTML = ""; document.getElementById("labels").innerHTML = ""; showFallback(); }
+
+  function start3D() {
+    var stage = document.getElementById("stage");
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    stage.appendChild(renderer.domElement);
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+
+    var FONT = '"Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic UI","Yu Gothic","Meiryo",sans-serif';
+    var grad = (function () {
+      var t = new THREE.DataTexture(new Uint8Array([130, 130, 130, 255, 205, 205, 205, 255, 250, 250, 250, 255]), 3, 1, THREE.RGBAFormat);
+      t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t;
+    })();
+    function M(color, extra) { var o = { color: color, gradientMap: grad }; for (var k in extra) o[k] = extra[k]; return new THREE.MeshToonMaterial(o); }
+    function add(geo, mat, x, y, z, parent, noShadow) {
+      var m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0);
+      if (!noShadow) { m.castShadow = true; m.receiveShadow = true; }
+      (parent || scene).add(m); return m;
+    }
+    function canvasTex(w, hgt, draw) {
+      var c = document.createElement("canvas"); c.width = w; c.height = hgt;
+      draw(c.getContext("2d"), w, hgt);
+      var t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+    }
+    function rrect(g, x, y, w, hh, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + hh, r); g.arcTo(x + w, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+    function fitText(g, text, maxW, size, weight) {
+      var s = size; do { g.font = weight + " " + s + "px " + FONT; s -= 2; } while (g.measureText(text).width > maxW && s > 10);
+    }
+    var SPH = new THREE.SphereGeometry(1, 28, 20);
+
+    /* --- 光 --- */
+    var hemi = new THREE.HemisphereLight(0xfff6ea, 0xd8bf9c, 0.6); scene.add(hemi);
+    var sun = new THREE.DirectionalLight(0xfff0dc, 0.5);
+    sun.position.set(6, 11, 7); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    var sc = sun.shadow.camera; sc.left = -9; sc.right = 9; sc.top = 9; sc.bottom = -9; sc.near = 1; sc.far = 30;
+    sun.shadow.bias = -0.0006; scene.add(sun);
+    var lamp = new THREE.PointLight(0xffc98a, 0, 12); lamp.position.set(0, 2.9, 0); scene.add(lamp);
+
+    /* --- 部屋 --- */
+    var W = 10, D = 8, H = 3.2;
+    var woodTex = canvasTex(512, 512, function (g, w, hh) {
+      var cols = ["#d9a873", "#d29f69", "#deae7b", "#cf9a63"];
+      var rows = 8, rh = hh / rows;
+      for (var r = 0; r < rows; r++) {
+        var off = (r % 2) * 128;
+        for (var x = -off; x < w; x += 256) {
+          g.fillStyle = cols[(r * 3 + Math.floor((x + off) / 256)) % cols.length];
+          g.fillRect(x, r * rh, 256, rh);
+          g.fillStyle = "rgba(120,70,30,.25)"; g.fillRect(x, r * rh, 2, rh);
+        }
+        g.fillStyle = "rgba(120,70,30,.28)"; g.fillRect(0, r * rh, w, 2);
+      }
+    });
+    woodTex.wrapS = woodTex.wrapT = THREE.RepeatWrapping; woodTex.repeat.set(2.5, 2);
+    var floor = add(new THREE.PlaneGeometry(W, D), M(0xffffff, { map: woodTex }), 0, 0, 0);
+    floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+    add(new THREE.BoxGeometry(W + 0.3, 0.3, D + 0.3), M(0xa8744a), 0, -0.151, 0).castShadow = false;
+
+    var wallBack = M(0xfbefdc), wallLeft = M(0xf8e6cf), band = M(0xcfe7da), base = M(0xb98a5e);
+    add(new THREE.BoxGeometry(W + 0.3, H, 0.15), wallBack, 0.0, H / 2, -D / 2 - 0.075);
+    add(new THREE.BoxGeometry(0.15, H, D), wallLeft, -W / 2 - 0.075, H / 2, 0);
+    // 腰壁の帯と幅木
+    add(new THREE.BoxGeometry(W, 0.9, 0.02), band, 0, 0.45, -D / 2 + 0.01, null, true);
+    add(new THREE.BoxGeometry(0.02, 0.9, D), band, -W / 2 + 0.01, 0.45, 0, null, true);
+    add(new THREE.BoxGeometry(W, 0.06, 0.05), M(0xffffff), 0, 0.92, -D / 2 + 0.03, null, true);
+    add(new THREE.BoxGeometry(0.05, 0.06, D), M(0xffffff), -W / 2 + 0.03, 0.92, 0, null, true);
+    add(new THREE.BoxGeometry(W, 0.12, 0.06), base, 0, 0.06, -D / 2 + 0.03, null, true);
+    add(new THREE.BoxGeometry(0.06, 0.12, D), base, -W / 2 + 0.03, 0.06, 0, null, true);
+
+    /* --- 窓（空の色が日本時間で変わる） --- */
+    var WX = 2.5, WY = 1.95, WW = 2.6, WH = 1.45;
+    var skyCanvas = document.createElement("canvas"); skyCanvas.width = 512; skyCanvas.height = 290;
+    var skyTex = new THREE.CanvasTexture(skyCanvas);
+    add(new THREE.PlaneGeometry(WW, WH), new THREE.MeshBasicMaterial({ map: skyTex }), WX, WY, -D / 2 + 0.012, null, true);
+    var frameM = M(0xffffff);
+    [[WX, WY + WH / 2, WW + 0.16, 0.08], [WX, WY - WH / 2, WW + 0.16, 0.08], [WX, WY, WW, 0.05]].forEach(function (f) {
+      add(new THREE.BoxGeometry(f[2], f[3], 0.08), frameM, f[0], f[1], -D / 2 + 0.04);
+    });
+    [WX - WW / 2, WX + WW / 2, WX].forEach(function (x, idx) {
+      add(new THREE.BoxGeometry(idx === 2 ? 0.05 : 0.08, WH, 0.08), frameM, x, WY, -D / 2 + 0.04);
+    });
+    add(new THREE.BoxGeometry(WW + 0.4, 0.06, 0.26), frameM, WX, WY - WH / 2 - 0.05, -D / 2 + 0.13);
+    var curtain = M(0xf6c6b8);
+    [-1, 1].forEach(function (s) {
+      var c = add(new THREE.CylinderGeometry(0.16, 0.22, WH + 0.35, 14), curtain, WX + s * (WW / 2 + 0.25), WY - 0.1, -D / 2 + 0.2);
+      c.scale.z = 0.5;
+    });
+    add(new THREE.CylinderGeometry(0.025, 0.025, WW + 1.0, 8), M(0xb98a5e), WX, WY + WH / 2 + 0.2, -D / 2 + 0.2).rotation.z = Math.PI / 2;
+
+    var period = "";
+    function periodOf(hr) { return (hr >= 5 && hr < 10) ? "morning" : (hr >= 10 && hr < 16) ? "day" : (hr >= 16 && hr < 19) ? "evening" : "night"; }
+    function drawSky() {
+      var p = periodOf(jst().h); if (p === period) return; period = p;
+      var g = skyCanvas.getContext("2d"), w = skyCanvas.width, hh = skyCanvas.height;
+      var stops = { morning: ["#9fd4f2", "#ffe6c7"], day: ["#5cb2ec", "#d3effc"], evening: ["#7b72b8", "#ffb07e", "#ffd8a0"], night: ["#16204d", "#3a4785"] }[p];
+      var gr = g.createLinearGradient(0, 0, 0, hh);
+      stops.forEach(function (c, i) { gr.addColorStop(i / (stops.length - 1), c); });
+      g.fillStyle = gr; g.fillRect(0, 0, w, hh);
+      if (p === "night") {
+        g.fillStyle = "#fff";
+        for (var i = 0; i < 40; i++) { var sx = (i * 97) % w, sy = (i * 53) % (hh * 0.8); g.globalAlpha = 0.4 + (i % 3) * 0.2; g.fillRect(sx, sy, 2, 2); }
+        g.globalAlpha = 1; g.fillStyle = "#fff6cf"; g.beginPath(); g.arc(380, 80, 30, 0, 7); g.fill();
+        g.fillStyle = stops[0]; g.beginPath(); g.arc(394, 72, 26, 0, 7); g.fill();
+      } else {
+        var sunPos = { morning: [110, 200, "#ffd27a"], day: [390, 70, "#fff3b0"], evening: [250, 230, "#ff8a5c"] }[p];
+        g.fillStyle = sunPos[2]; g.globalAlpha = 0.35; g.beginPath(); g.arc(sunPos[0], sunPos[1], 52, 0, 7); g.fill();
+        g.globalAlpha = 1; g.beginPath(); g.arc(sunPos[0], sunPos[1], 32, 0, 7); g.fill();
+        g.fillStyle = p === "evening" ? "rgba(255,225,215,.8)" : "rgba(255,255,255,.92)";
+        [[170, 95, 1], [330, 170, 0.8], [60, 60, 0.6]].forEach(function (c) {
+          var x = c[0], y = c[1], k = c[2]; g.beginPath();
+          g.arc(x, y, 22 * k, 0, 7); g.arc(x + 26 * k, y - 10 * k, 28 * k, 0, 7); g.arc(x + 56 * k, y, 22 * k, 0, 7); g.fill();
+          g.fillRect(x, y, 56 * k, 22 * k);
+        });
+      }
+      // 遠くの街並み
+      g.fillStyle = p === "night" ? "rgba(20,25,60,.85)" : "rgba(140,170,160,.55)";
+      [[0, 40, 60], [60, 70, 45], [105, 30, 70], [175, 55, 50], [225, 80, 40], [265, 45, 75], [340, 65, 55], [395, 35, 60], [455, 60, 57]].forEach(function (b) { g.fillRect(b[0], hh - b[1], b[2] - 4, b[1]); });
+      if (p === "night") { g.fillStyle = "#ffe69a"; for (var j = 0; j < 22; j++) g.fillRect((j * 61) % w, hh - 10 - (j * 17) % 50, 5, 5); }
+      skyTex.needsUpdate = true;
+      // 部屋の明るさ
+      var L = { morning: [0.58, 0.48, 0], day: [0.62, 0.52, 0], evening: [0.5, 0.4, 0.3], night: [0.42, 0.18, 0.7] }[p];
+      hemi.intensity = L[0]; sun.intensity = L[1]; lamp.intensity = L[2];
+      hemi.color.set(p === "night" ? 0xc9ccff : p === "evening" ? 0xffe0c8 : 0xfff6ea);
+      sun.color.set(p === "evening" ? 0xffc89a : p === "night" ? 0x9aa8ff : 0xfff0dc);
+    }
+    drawSky();
+
+    /* --- 会社名の看板 --- */
+    var signTex = canvasTex(1024, 220, function (g, w, hh) {
+      rrect(g, 6, 6, w - 12, hh - 12, 60); g.fillStyle = "#e8964a"; g.fill();
+      g.lineWidth = 8; g.strokeStyle = "#fff4e2"; rrect(g, 22, 22, w - 44, hh - 44, 46); g.stroke();
+      g.fillStyle = "#fffaf2"; g.textAlign = "center"; g.textBaseline = "middle";
+      fitText(g, "🐾 " + COMPANY, w - 120, 96, "800");
+      g.fillText("🐾 " + COMPANY, w / 2, hh / 2 + 4);
+    });
+    add(new THREE.PlaneGeometry(3.4, 0.73), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }), -1.7, 2.55, -D / 2 + 0.02, null, true);
+
+    /* --- 壁時計（日本時間で動く） --- */
+    var clock = new THREE.Group(); clock.position.set(-W / 2 + 0.03, 2.3, -1.1); clock.rotation.y = Math.PI / 2; scene.add(clock);
+    var rim = add(new THREE.CylinderGeometry(0.46, 0.46, 0.08, 40), M(0x6fbfa8), 0, 0, 0.04, clock); rim.rotation.x = Math.PI / 2;
+    var faceTex = canvasTex(256, 256, function (g) {
+      g.fillStyle = "#fffaf2"; g.beginPath(); g.arc(128, 128, 126, 0, 7); g.fill();
+      g.fillStyle = "#4a3426"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = "800 30px " + FONT;
+      for (var n = 1; n <= 12; n++) { var a = n / 12 * Math.PI * 2; g.fillText(String(n), 128 + Math.sin(a) * 96, 128 - Math.cos(a) * 96); }
+      g.fillStyle = "#e8964a"; g.beginPath(); g.arc(128, 128, 10, 0, 7); g.fill();
+    });
+    add(new THREE.CircleGeometry(0.41, 40), new THREE.MeshBasicMaterial({ map: faceTex }), 0, 0, 0.085, clock, true);
+    function hand(len, wid, color, z) {
+      var geo = new THREE.BoxGeometry(wid, len, 0.012); geo.translate(0, len / 2 - 0.04, 0);
+      var m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: color })); m.position.z = z; clock.add(m); return m;
+    }
+    var hHand = hand(0.22, 0.045, 0x4a3426, 0.095), mHand = hand(0.32, 0.03, 0x4a3426, 0.1), sHand = hand(0.34, 0.012, 0xe8964a, 0.105);
+
+    /* --- 観葉植物 --- */
+    function plant(x, z, s) {
+      var g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g);
+      add(new THREE.CylinderGeometry(0.3, 0.22, 0.5, 20), M(0xd98b62), 0, 0.25, 0, g);
+      add(new THREE.CylinderGeometry(0.31, 0.31, 0.06, 20), M(0xc77a52), 0, 0.5, 0, g);
+      var greens = [0x7cc58a, 0x5fb07a, 0x8fd19a];
+      for (var i = 0; i < 9; i++) {
+        var a = i / 9 * Math.PI * 2, r = i % 2 ? 0.2 : 0.12;
+        var leaf = add(SPH, M(greens[i % 3]), Math.cos(a) * r, 0.85 + (i % 3) * 0.22, Math.sin(a) * r, g);
+        leaf.scale.set(0.2, 0.36, 0.12); leaf.rotation.set(Math.sin(a) * 0.5, -a, Math.cos(a) * 0.5);
+      }
+      add(SPH, M(0x6dbb84), 0, 1.4, 0, g).scale.set(0.22, 0.3, 0.22);
+      return g;
+    }
+    var plants = [plant(-4.35, -3.35, 1.25), plant(4.4, -3.4, 0.95), plant(-4.4, 3.3, 0.8)];
+
+    /* --- 本棚 --- */
+    var shelf = new THREE.Group(); shelf.position.set(-4.72, 0, 1.4); shelf.rotation.y = Math.PI / 2; scene.add(shelf);
+    add(new THREE.BoxGeometry(1.4, 1.3, 0.4), M(0xe9c79a), 0, 0.65, 0, shelf);
+    add(new THREE.BoxGeometry(1.3, 0.04, 0.36), M(0xc99c6c), 0, 0.66, 0.03, shelf);
+    var bookCols = [0xec9a92, 0x6fbfa8, 0xf2c76b, 0x8fb3e0, 0xe8964a, 0xb7a0d8];
+    for (var b = 0; b < 14; b++) {
+      var row = b < 7 ? 0 : 1, k = b % 7;
+      var hb = 0.38 + (b * 37 % 10) / 100;
+      add(new THREE.BoxGeometry(0.12, hb, 0.26), M(bookCols[b % bookCols.length]), -0.52 + k * 0.155, 0.1 + row * 0.6 + hb / 2, 0.08, shelf);
+    }
+
+    /* --- 家具 --- */
+    function rug(x, z, r, color) { var m = add(new THREE.CircleGeometry(r, 40), M(color), x, 0.006, z); m.rotation.x = -Math.PI / 2; m.castShadow = false; }
+    function desk(parent) {
+      add(new THREE.BoxGeometry(1.6, 0.07, 0.82), M(0xf0d2a6), 0, 0.735, 0, parent);
+      [[-0.73, -0.35], [0.73, -0.35], [-0.73, 0.35], [0.73, 0.35]].forEach(function (p) {
+        add(new THREE.CylinderGeometry(0.035, 0.035, 0.7, 10), M(0xb98a5e), p[0], 0.35, p[1], parent);
+      });
+      add(new THREE.BoxGeometry(0.42, 0.26, 0.74), M(0xe9c79a), 0.5, 0.56, 0, parent);
+    }
+    function chair(parent, color, z) {
+      var g = new THREE.Group(); g.position.set(0, 0, z); parent.add(g);
+      var cm = M(color);
+      add(new THREE.CylinderGeometry(0.3, 0.3, 0.09, 24), cm, 0, 0.45, 0, g);
+      var back = add(new THREE.BoxGeometry(0.56, 0.5, 0.08), cm, 0, 0.8, -0.27, g); back.rotation.x = -0.08;
+      add(new THREE.CylinderGeometry(0.03, 0.03, 0.36, 8), M(0x8b8f98), 0, 0.24, 0, g);
+      add(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 6), M(0x8b8f98), 0, 0.62, -0.25, g);
+      for (var i = 0; i < 5; i++) {
+        var a = i / 5 * Math.PI * 2;
+        var leg = add(new THREE.BoxGeometry(0.05, 0.03, 0.3), M(0x8b8f98), Math.sin(a) * 0.15, 0.06, Math.cos(a) * 0.15, g); leg.rotation.y = a;
+        add(SPH, M(0x4a4f5a), Math.sin(a) * 0.29, 0.035, Math.cos(a) * 0.29, g).scale.setScalar(0.035);
+      }
+      return g;
+    }
+    function laptop(parent, x, z, on, open) {
+      var g = new THREE.Group(); g.position.set(x, 0.77, z); parent.add(g);
+      add(new THREE.BoxGeometry(0.5, 0.022, 0.34), M(0xdfe4ec), 0, 0.011, 0, g);
+      add(new THREE.PlaneGeometry(0.42, 0.18), M(0x9aa3b2), 0, 0.023, -0.03, g, true).rotation.x = -Math.PI / 2;
+      var lid = new THREE.Group(); lid.position.set(0, 0.022, 0.17); g.add(lid);
+      lid.rotation.x = open ? 0.25 : -Math.PI / 2 + 0.02; // 開いた画面は奥へ少し倒す／閉じたらキーボードの上に重ねる
+      add(new THREE.BoxGeometry(0.5, 0.32, 0.018), M(0xdfe4ec), 0, 0.16, 0, lid);
+      var scrTex = canvasTex(256, 160, function (gg, w, hh) {
+        gg.fillStyle = on ? "#fff8ee" : "#2d3340"; gg.fillRect(0, 0, w, hh);
+        if (on) {
+          gg.fillStyle = "#e8964a"; gg.fillRect(14, 14, 90, 14);
+          gg.fillStyle = "#c8b8a6"; for (var i = 0; i < 6; i++) gg.fillRect(14, 42 + i * 18, 120 + (i * 53 % 100), 7);
+          gg.fillStyle = "#6fbfa8"; gg.fillRect(180, 40, 60, 60);
+        }
+      });
+      var scr = add(new THREE.PlaneGeometry(0.45, 0.28), new THREE.MeshBasicMaterial({ map: scrTex }), 0, 0.16, -0.0095, lid, true);
+      scr.rotation.y = Math.PI;
+      // ふたの裏の肉球ステッカー（カメラ側から見える）
+      var paw = canvasTex(128, 128, function (gg) {
+        gg.fillStyle = "#e8964a"; gg.beginPath(); gg.ellipse(64, 78, 28, 22, 0, 0, 7); gg.fill();
+        [[34, 44], [54, 30], [76, 30], [96, 44]].forEach(function (p) { gg.beginPath(); gg.arc(p[0], p[1], 11, 0, 7); gg.fill(); });
+      });
+      add(new THREE.PlaneGeometry(0.12, 0.12), new THREE.MeshBasicMaterial({ map: paw, transparent: true }), 0, 0.16, 0.0095, lid, true);
+      return g;
+    }
+    function tent(parent, text, bg, x, z, scale) {
+      var tex = canvasTex(320, 160, function (g, w, hh) {
+        rrect(g, 4, 4, w - 8, hh - 8, 26); g.fillStyle = bg; g.fill();
+        g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle"; fitText(g, text, w - 40, 70, "800");
+        g.fillText(text, w / 2, hh / 2 + 3);
+      });
+      var g = new THREE.Group(); g.position.set(x, 0.77, z); g.scale.setScalar(scale || 1); parent.add(g);
+      var mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: grad, side: THREE.DoubleSide });
+      var front = add(new THREE.PlaneGeometry(0.44, 0.22), mat, 0, 0.1, 0.045, g); front.rotation.x = -0.42;
+      var backP = add(new THREE.PlaneGeometry(0.44, 0.22), mat, 0, 0.1, -0.045, g); backP.rotation.x = 0.42; backP.rotation.y = Math.PI;
+      return g;
+    }
+
+    /* 社長の席 */
+    var bossDesk = new THREE.Group(); bossDesk.position.set(-2.3, 0, -2.05); bossDesk.rotation.y = 0.12; scene.add(bossDesk);
+    rug(-2.3, -2.2, 1.35, 0xf6d3cb);
+    desk(bossDesk); chair(bossDesk, 0xec9a92, -0.68); laptop(bossDesk, -0.15, -0.12, true, true);
+    tent(bossDesk, "社長", "#ec9a92", -0.55, 0.26, 0.85);
+    var mug = add(new THREE.CylinderGeometry(0.05, 0.045, 0.1, 16), M(0xffffff), 0.22, 0.82, 0.27, bossDesk);
+    // 報告書（件数ぶん積む）
+    var stack = new THREE.Group(); stack.position.set(0.45, 0.77, 0.08); bossDesk.add(stack);
+    var paperTop = canvasTex(128, 170, function (g, w, hh) {
+      g.fillStyle = "#fffdf8"; g.fillRect(0, 0, w, hh); g.fillStyle = "#e8964a"; g.fillRect(12, 14, 60, 12);
+      g.fillStyle = "#cdbca8"; for (var i = 0; i < 7; i++) g.fillRect(12, 40 + i * 17, 90 - (i % 3) * 18, 6);
+    });
+    var stackHit = null;
+    if (STATE === "reported" && COUNT > 0) {
+      for (var pI = 0; pI < COUNT; pI++) {
+        var mats = [M(0xfffdf8), M(0xfffdf8), M(0xffffff, { map: paperTop }), M(0xfffdf8), M(0xfffdf8), M(0xfffdf8)];
+        var sheet = add(new THREE.BoxGeometry(0.3, 0.022, 0.4), mats, 0, 0.012 + pI * 0.026, 0, stack);
+        sheet.rotation.y = (pI % 2 ? 1 : -1) * 0.06 * ((pI * 7) % 3);
+      }
+      add(new THREE.BoxGeometry(0.06, 0.012, 0.02), M(0xec9a92), 0.1, 0.02 + COUNT * 0.026, -0.18, stack);
+    } else if (STATE === "no_news") {
+      tent(bossDesk, "異常なし", "#6fbfa8", 0.45, 0.1, 1.0);
+    }
+    stackHit = add(new THREE.BoxGeometry(1.2, 0.5, 0.9), new THREE.MeshBasicMaterial({ visible: false }), 0.15, 0.95, 0.05, bossDesk, true);
+    stackHit.userData.action = "news";
+
+    /* 社員の席 */
+    var empDesk = new THREE.Group(); empDesk.position.set(1.9, 0, 0.35); empDesk.rotation.y = 0.38; scene.add(empDesk);
+    rug(1.9, 0.25, 1.35, 0xd5ece2);
+    desk(empDesk);
+    var empChair = chair(empDesk, 0x6fbfa8, -0.62);
+    var present = STATE !== "before";
+    laptop(empDesk, -0.12, -0.12, present, true);
+    add(SPH, M(0x7cc58a), 0.55, 0.86, 0.22, empDesk).scale.set(0.09, 0.11, 0.09);
+    add(new THREE.CylinderGeometry(0.07, 0.055, 0.1, 14), M(0xd98b62), 0.55, 0.81, 0.22, empDesk);
+    if (!present) tent(empDesk, "出社前", "#a99482", 0.0, 0.22, 1.0);
+
+    /* 空いている席（募集中） */
+    var openDesk = new THREE.Group(); openDesk.position.set(-1.7, 0, 1.9); openDesk.rotation.y = 0.25; scene.add(openDesk);
+    rug(-1.7, 1.85, 1.2, 0xf3e3c2);
+    desk(openDesk); chair(openDesk, 0xd9cbb8, -0.5); laptop(openDesk, -0.15, -0.1, false, false);
+    tent(openDesk, "募集中", "#f2b950", 0.15, 0.2, 1.05);
+
+    /* --- 社員：メガネの柴犬（トゥーン調） --- */
+    var shiba = null;
+    function makeShiba() {
+      var g = new THREE.Group();
+      var O = M(0xe8964a), C = M(0xfff1dc), K = M(0x2b2320), G = M(0x47506b), T = M(0x6fbfa8);
+      var torso = add(SPH, O, 0, 0.8, 0, g); torso.scale.set(0.3, 0.35, 0.26);
+      add(SPH, C, 0, 0.78, 0.12, g).scale.set(0.2, 0.26, 0.16);
+      var scarf = add(new THREE.TorusGeometry(0.19, 0.055, 10, 26), T, 0, 1.08, 0.01, g); scarf.rotation.x = Math.PI / 2;
+      add(new THREE.ConeGeometry(0.06, 0.14, 10), T, 0.06, 1.0, 0.2, g).rotation.set(0.3, 0, 0.4);
+      [-1, 1].forEach(function (s) {
+        add(SPH, O, s * 0.14, 0.56, 0.14, g).scale.set(0.11, 0.1, 0.2);
+        add(new THREE.CylinderGeometry(0.06, 0.055, 0.44, 12), O, s * 0.14, 0.32, 0.31, g);
+        add(SPH, C, s * 0.14, 0.08, 0.37, g).scale.set(0.08, 0.06, 0.11);
+      });
+      var tail = new THREE.Group(); tail.position.set(0, 0.7, -0.26); g.add(tail);
+      var tt = add(new THREE.TorusGeometry(0.09, 0.045, 10, 22, Math.PI * 1.5), O, 0, 0.08, -0.02, tail); tt.rotation.y = Math.PI / 2;
+      add(SPH, C, 0, 0.17, -0.02, tail).scale.setScalar(0.05);
+
+      var head = new THREE.Group(); head.position.set(0, 1.36, 0.03); g.add(head);
+      add(SPH, O, 0, 0, 0, head).scale.set(0.3, 0.27, 0.27);
+      add(SPH, C, 0, -0.08, 0.1, head).scale.set(0.24, 0.15, 0.2);
+      add(SPH, C, 0, -0.07, 0.21, head).scale.set(0.13, 0.1, 0.11);
+      add(SPH, K, 0, -0.03, 0.315, head).scale.set(0.045, 0.034, 0.03);
+      var mouth = add(new THREE.TorusGeometry(0.03, 0.008, 6, 14, Math.PI), K, 0, -0.1, 0.3, head); mouth.rotation.z = Math.PI;
+      var eyes = [], brows = [];
+      [-1, 1].forEach(function (s) {
+        var e = add(SPH, K, s * 0.1, 0.035, 0.238, head); e.scale.set(0.034, 0.045, 0.02); eyes.push(e);
+        add(SPH, M(0xffffff), s * 0.1 + 0.012, 0.05, 0.255, head, true).scale.setScalar(0.011);
+        var br = add(SPH, C, s * 0.095, 0.125, 0.225, head); br.scale.set(0.045, 0.024, 0.02); brows.push(br);
+        var ear = add(new THREE.ConeGeometry(0.095, 0.2, 14), O, s * 0.17, 0.23, -0.02, head); ear.rotation.z = -s * 0.35;
+        var inner = add(new THREE.ConeGeometry(0.055, 0.13, 12), C, s * 0.168, 0.215, 0.025, head); inner.rotation.z = -s * 0.35;
+        // メガネ
+        var ring = add(new THREE.TorusGeometry(0.066, 0.011, 8, 26), G, s * 0.1, 0.035, 0.268, head);
+        var temple = add(new THREE.BoxGeometry(0.012, 0.012, 0.2), G, s * 0.17, 0.045, 0.17, head); temple.rotation.y = s * 0.25;
+      });
+      add(new THREE.CylinderGeometry(0.009, 0.009, 0.07, 6), G, 0, 0.045, 0.272, head).rotation.z = Math.PI / 2;
+      var sweat = add(SPH, new THREE.MeshToonMaterial({ color: 0x8fd0f2, gradientMap: grad, transparent: true, opacity: 0.9 }), 0.27, 0.1, 0.1, head, true);
+      sweat.scale.set(0.05, 0.08, 0.05); sweat.visible = false;
+
+      var arms = [];
+      [-1, 1].forEach(function (s) {
+        var arm = new THREE.Group(); arm.position.set(s * 0.26, 0.98, 0.03); g.add(arm);
+        var geo = new THREE.CylinderGeometry(0.055, 0.05, 0.4, 12); geo.rotateX(Math.PI / 2); geo.translate(0, 0, 0.2);
+        add(geo, O, 0, 0, 0, arm);
+        add(SPH, C, 0, 0, 0.42, arm).scale.set(0.065, 0.05, 0.07);
+        arms.push({ g: arm, s: s });
+      });
+      g.traverse(function (o) { o.userData.action = "id"; });
+      return { group: g, head: head, eyes: eyes, brows: brows, mouth: mouth, arms: arms, tail: tail, sweat: sweat };
+    }
+    if (present) {
+      shiba = makeShiba();
+      shiba.group.position.set(0, 0, -0.56);
+      empDesk.add(shiba.group);
+      if (STATE === "search_failed") {
+        shiba.brows[0].rotation.z = -0.55; shiba.brows[1].rotation.z = 0.55;
+        shiba.brows[0].position.y = shiba.brows[1].position.y = 0.135;
+        shiba.mouth.rotation.z = 0; shiba.mouth.position.y = -0.125;
+        shiba.sweat.visible = true;
+      }
+    }
+
+    /* --- 名札・吹き出し・報告書バッジ --- */
+    var labels = document.getElementById("labels");
+    var anchors = [];
+    function anchor(el, obj, local, dx, dy) { labels.appendChild(el); anchors.push({ el: el, obj: obj, local: local, dx: dx, dy: dy }); }
+    if (shiba) {
+      anchor(h("div", "tag", EMP_NAME), shiba.group, new THREE.Vector3(0, 1.95, 0), -0.5, -1);
+      if (SPEECH) { anchor(h("div", "bubble", SPEECH), shiba.group, new THREE.Vector3(0, 1.95, 0), 0, 0); anchors[anchors.length - 1].above = anchors[anchors.length - 2]; }
+    }
+    if (STATE === "reported" && COUNT > 0) {
+      var bd = h("div", "badge"); var sp = h("span", null, "📄 " + COUNT); bd.appendChild(sp);
+      bd.title = "今日のニュース"; bd.onclick = function () { openModal("news"); };
+      anchor(bd, stack, new THREE.Vector3(0, 0.28 + COUNT * 0.026, 0), -0.5, -1);
+    }
+    var tmpV = new THREE.Vector3();
+    function placeLabels() {
+      var w = window.innerWidth, hh = window.innerHeight;
+      anchors.forEach(function (a) {
+        tmpV.copy(a.local); a.obj.localToWorld(tmpV); tmpV.project(camera);
+        var x = (tmpV.x + 1) / 2 * w, y = (1 - tmpV.y) / 2 * hh;
+        var r = a.el.getBoundingClientRect();
+        if (a.above) { // 名札のすぐ上に置く
+          var tr = a.above.el.getBoundingClientRect();
+          x = a.above.px + tr.width / 2 - 22; y = a.above.py - r.height - 12;
+          a.el.style.transform = "translate(" + Math.round(Math.max(8, Math.min(w - r.width - 8, x))) + "px," + Math.round(y) + "px)";
+          a.el.style.visibility = a.above.el.style.visibility; return;
+        }
+        var px = Math.max(8, Math.min(w - r.width - 8, x + a.dx * r.width));   // 画面からはみ出さないように
+        a.px = px; a.py = y + a.dy * r.height;
+        a.el.style.transform = "translate(" + Math.round(a.px) + "px," + Math.round(a.py) + "px)";
+        a.el.style.visibility = tmpV.z < 1 ? "visible" : "hidden";
+      });
+    }
+
+    /* --- カメラ操作（ドラッグで回転・ホイールで拡大・ゆっくり自動で回る） --- */
+    var TARGET = new THREE.Vector3(0, 0.9, -0.2);
+    var AZ_MIN = -0.15, AZ_MAX = 1.7;
+    var portrait = window.innerWidth / window.innerHeight < 1;
+    var startR = portrait ? 23 : 12.5;
+    camera.position.set(TARGET.x + startR * Math.sin(1.0) * Math.sin(0.75), TARGET.y + startR * Math.cos(1.0), TARGET.z + startR * Math.sin(1.0) * Math.cos(0.75));
+    camera.lookAt(TARGET);
+    var controls = null, ctrlUpdate;
+    if (THREE.OrbitControls) {
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.copy(TARGET);
+      controls.enableDamping = true; controls.dampingFactor = 0.08; controls.enablePan = false;
+      controls.minDistance = 7; controls.maxDistance = 28;
+      controls.minPolarAngle = 0.35; controls.maxPolarAngle = 1.3;
+      controls.minAzimuthAngle = AZ_MIN; controls.maxAzimuthAngle = AZ_MAX;
+      controls.autoRotate = true; controls.autoRotateSpeed = 0.45;
+      var resumeT = null;
+      controls.addEventListener("start", function () { controls.autoRotate = false; clearTimeout(resumeT); });
+      controls.addEventListener("end", function () { clearTimeout(resumeT); resumeT = setTimeout(function () { controls.autoRotate = true; }, 4000); });
+      ctrlUpdate = function () {
+        var az = controls.getAzimuthalAngle();
+        if (az < AZ_MIN + 0.12) controls.autoRotateSpeed = -0.45;      // 端まで来たら向きを変える
+        else if (az > AZ_MAX - 0.12) controls.autoRotateSpeed = 0.45;
+        controls.update();
+      };
+    } else {
+      // OrbitControls が読めなかったときの簡易操作
+      var sph = { th: 0.75, ph: 1.0, r: startR }, dir = 1, idle = 0, ptrs = {}, pinch = 0;
+      var el = renderer.domElement;
+      function apply() {
+        sph.th = Math.max(AZ_MIN, Math.min(AZ_MAX, sph.th)); sph.ph = Math.max(0.35, Math.min(1.3, sph.ph)); sph.r = Math.max(7, Math.min(28, sph.r));
+        camera.position.set(TARGET.x + sph.r * Math.sin(sph.ph) * Math.sin(sph.th), TARGET.y + sph.r * Math.cos(sph.ph), TARGET.z + sph.r * Math.sin(sph.ph) * Math.cos(sph.th));
+        camera.lookAt(TARGET);
+      }
+      el.addEventListener("pointerdown", function (e) { ptrs[e.pointerId] = { x: e.clientX, y: e.clientY }; el.setPointerCapture(e.pointerId); idle = -4; });
+      el.addEventListener("pointermove", function (e) {
+        var p = ptrs[e.pointerId]; if (!p) return;
+        var ids = Object.keys(ptrs);
+        if (ids.length === 2) {
+          p.x = e.clientX; p.y = e.clientY;
+          var a = ptrs[ids[0]], b = ptrs[ids[1]], dd = Math.hypot(a.x - b.x, a.y - b.y);
+          if (pinch) sph.r *= pinch / dd; pinch = dd;
+        } else {
+          sph.th -= (e.clientX - p.x) * 0.006; sph.ph -= (e.clientY - p.y) * 0.004; p.x = e.clientX; p.y = e.clientY;
+        }
+        idle = -4;
+      });
+      function up(e) { delete ptrs[e.pointerId]; pinch = 0; }
+      el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+      el.addEventListener("wheel", function (e) { e.preventDefault(); sph.r *= e.deltaY > 0 ? 1.08 : 0.93; idle = -4; }, { passive: false });
+      ctrlUpdate = function (dt) {
+        idle += dt;
+        if (idle > 0 && !Object.keys(ptrs).length) {
+          sph.th += dir * dt * 0.05;
+          if (sph.th > AZ_MAX - 0.12) dir = -1; else if (sph.th < AZ_MIN + 0.12) dir = 1;
+        }
+        apply();
+      };
+    }
+
+    /* --- クリック（報告書・社員） --- */
+    var ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+    var picks = [stackHit]; if (shiba) picks.push(shiba.group);
+    function pickAt(cx, cy) {
+      mouse.set(cx / window.innerWidth * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
+      ray.setFromCamera(mouse, camera);
+      var hit = ray.intersectObjects(picks, true)[0];
+      return hit ? hit.object.userData.action : null;
+    }
+    var downAt = null;
+    renderer.domElement.addEventListener("pointerdown", function (e) { downAt = { x: e.clientX, y: e.clientY }; });
+    renderer.domElement.addEventListener("pointerup", function (e) {
+      if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) return;
+      var act = pickAt(e.clientX, e.clientY); if (act) openModal(act);
+    });
+    renderer.domElement.addEventListener("pointermove", function (e) {
+      if (e.buttons) return;
+      renderer.domElement.style.cursor = pickAt(e.clientX, e.clientY) ? "pointer" : "grab";
+    });
+
+    window.addEventListener("resize", function () {
+      camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    /* --- 動き --- */
+    var clockT = new THREE.Clock(), nextBlink = 1.5, blinkEnd = 0, lastSky = 0, tmpT = new THREE.Vector3();
+    function loop() {
+      requestAnimationFrame(loop);
+      var dt = Math.min(clockT.getDelta(), 0.1), t = clockT.elapsedTime;
+
+      var j = jst(), sec = j.s + j.ms / 1000;
+      sHand.rotation.z = -sec / 60 * Math.PI * 2;
+      mHand.rotation.z = -(j.mi + sec / 60) / 60 * Math.PI * 2;
+      hHand.rotation.z = -((j.h % 12) + j.mi / 60) / 12 * Math.PI * 2;
+      if (t - lastSky > 30) { lastSky = t; drawSky(); }
+
+      plants.forEach(function (p, i) { p.rotation.z = Math.sin(t * 0.8 + i) * 0.015; });
+
+      if (shiba) {
+        var troubled = STATE === "search_failed";
+        // まばたき
+        if (t > nextBlink) { blinkEnd = t + 0.13; nextBlink = t + 2.2 + Math.random() * 3; }
+        var ey = t < blinkEnd ? 0.006 : 0.045;
+        shiba.eyes.forEach(function (e) { e.scale.y = ey; });
+        // キーボードを打つ
+        shiba.group.updateMatrixWorld();
+        shiba.arms.forEach(function (a, i) {
+          var bob = troubled ? Math.sin(t * 2 + i) * 0.004 : Math.max(0, Math.sin(t * 15 + i * 2.1)) * 0.035;
+          tmpT.set(a.s * 0.16, 0.79 + bob, 0.43); shiba.group.localToWorld(tmpT); a.g.lookAt(tmpT);
+        });
+        shiba.head.rotation.x = troubled ? 0.12 : Math.sin(t * 7.5) * 0.025;
+        shiba.head.rotation.z = troubled ? 0.14 + Math.sin(t * 1.2) * 0.03 : Math.sin(t * 0.9) * 0.05;
+        shiba.tail.rotation.z = Math.sin(t * (troubled ? 2 : 11)) * (troubled ? 0.1 : 0.35);
+        if (troubled) shiba.sweat.position.y = 0.1 - ((t * 0.25) % 0.08);
+      }
+
+      ctrlUpdate(dt);
+      renderer.render(scene, camera);
+      placeLabels();
+    }
+    loop();
+  }
+})();
+</script>
+</body>
+</html>

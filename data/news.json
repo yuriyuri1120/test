@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "company": {
+    "name": "たなかAIカンパニー"
+  },
+  "employee": {
+    "name": "ニュースくん",
+    "look": "メガネをかけた柴犬",
+    "job": "AIニュース担当",
+    "hours": "毎朝 7:00（日本時間）"
+  },
+  "days": [
+    {
+      "date": "2026-10-10",
+      "status": "reported",
+      "run_at": "2026-10-10T11:14+09:00",
+      "window": "2026-10-09 11:14〜2026-10-10 11:14（日本時間）",
+      "report_file": "報告/2026-10-10_AIニュース.md",
+      "speech": "社長！今日は2件です！",
+      "count": 2,
+      "news": [
+        {
+          "no": 1,
+          "headline": "無料版Geminiは軽量モデルだけに",
+          "category": "efficiency",
+          "date": "2026-10-09",
+          "date_note": "適用開始日（変更の報道は2026-10-03）",
+          "source": "9to5Google（報道）",
+          "url": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/",
+          "verified": "press",
+          "verified_note": "Google公式ヘルプは開けず、複数の報道で裏付け（記事本文も通信制限で開けず、検索結果で確認）"
+        },
+        {
+          "no": 2,
+          "headline": "ChatGPT悪用の偽記事に要注意",
+          "category": "chatgpt",
+          "date": "2026-10-09",
+          "date_note": "ワシントン・ポストの報道日（OpenAIの報告は2026-10-08）",
+          "source": "The Washington Post（報道）",
+          "url": "https://www.washingtonpost.com/technology/2026/10/09/chatgpt-users-iran-planted-ai-generated-articles-us-news-media/",
+          "verified": "press",
+          "verified_note": "OpenAI公式ページは開けず、NPRなどの報道で裏付け（記事本文も通信制限で開けず、検索結果で確認）"
+        }
+      ]
+    }
+  ]
+}
